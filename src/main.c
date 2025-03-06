@@ -31,7 +31,8 @@ struct board_struct {
 };
 void render_board(struct board_struct *board,WINDOW *win);
 void generate_mines(struct board_struct *board,int count,int origin_x, int origin_y);
-int get_dig_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y);
+int get_action_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y);
+void place_flag(struct board_struct *board,int x,int y);
 
 int main(int argc, char **argv){
 	//====== generate board ======
@@ -77,10 +78,20 @@ int main(int argc, char **argv){
 	//====== mainloop ======
 	int action_x = 0;
 	int action_y = 0;
+	int started = 0; //has the player dug their first square
 	for (int action = ACTION_NULL; action != ACTION_QUIT;){
 		render_board(board,board_window);
-		action = get_dig_position(board,board_window,&action_x,&action_y);
+		action = get_action_position(board,board_window,&action_x,&action_y);
 		if (action == ACTION_QUIT) break;
+		if (action == ACTION_DIG){
+			if (started == 0){
+				generate_mines(board,mine_count,action_x,action_y);
+			}
+			started = 1;
+		}
+		if ((action == ACTION_FLAG) && started){ //dont let them flag if they havent started
+			place_flag(board,action_x,action_y);
+		}
 	}
 
 	//====== cleanup ======
@@ -99,7 +110,9 @@ void render_board(struct board_struct *board,WINDOW *win){
 	int height = board->height;
 	for (int x = 0; x < width; x++){
 		for (int y = 0; y < height; y++){
-			mvwprintw(win,y+1,x+1,"%c",board->squares[x][y]);
+			char character = board->squares[x][y];
+			if (character == '\0') character = ' ';
+			mvwprintw(win,y+1,x+1,"%c",character);
 		}
 	}
 }
@@ -124,7 +137,7 @@ void generate_mines(struct board_struct *board,int count,int origin_x, int origi
 	}
 }
 
-int get_dig_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y){
+int get_action_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y){
 	int width = board->width;
 	int height = board->height;
 	int current_x = *action_x;
@@ -163,5 +176,13 @@ int get_dig_position(struct board_struct *board,WINDOW *board_window,int *action
 		current_y = CLAMP(current_y,0,height-1);
 		*action_x = current_x;
 		*action_y = current_y;
+	}
+}
+void place_flag(struct board_struct *board,int x,int y){
+	char **squares = board->squares;
+	if (squares[x][y] == 'P'){ //flag already there
+		squares[x][y] = '\0';
+	} else if (squares[x][y] == '\0'){ //not dug up and no flag
+		squares[x][y] = 'P';
 	}
 }
