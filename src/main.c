@@ -1,9 +1,14 @@
 #include <ncurses.h>
 #include <stdlib.h>
+#include <curses.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <locale.h>
+
+#define CLAMP_MAX(val,max) ((val) < max) ? (val) : max
+#define CLAMP_MIN(val,min) ((val) > min) ? (val) : min
+#define CLAMP(val,min,max) CLAMP_MAX(CLAMP_MIN(val,min),max)
 
 //==== structs ====
 struct board_struct {
@@ -19,6 +24,7 @@ struct board_struct {
 };
 void render_board(struct board_struct *board,WINDOW *win);
 void generate_mines(struct board_struct *board,int count,int origin_x, int origin_y);
+int get_dig_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y);
 
 int main(int argc, char **argv){
 	//====== generate board ======
@@ -41,21 +47,12 @@ int main(int argc, char **argv){
 		memset(board->squares[i],0,sizeof(char)*height);
 	}
 
-	//==== random mine placement ====
-	board->mine_count = mine_count;
-	board->mine_coords = malloc(sizeof(int[2])*mine_count);
-	for (int i = 0; i < mine_count; i++){
-		int x = random() % width;
-		int y = random() % height;
-		board->mine_coords[i][0] = x;
-		board->mine_coords[i][1] = y;
-		//printf("mine at (%d,%d)\n",x,y);
-	}
-
 	//====== initialise ncurses ======
 	setlocale(LC_ALL, "");
 	initscr();
-	intrflush(stdscr,TRUE);
+	noecho();
+	cbreak();
+	//intrflush(stdscr,TRUE);
 	keypad(stdscr,TRUE);
 	//board display window
 	int centre_x = COLS/2;
@@ -65,13 +62,16 @@ int main(int argc, char **argv){
 		height+2,width+2,
 		centre_y-(height/2)-1,centre_x-(width/2)-1
 	);
+	//keypad(board_window,TRUE);
 	refresh();
 	box(board_window,0,0);
 	wrefresh(board_window);
 
 	//====== mainloop ======
 	render_board(board,board_window);
-	getch();
+	int action_x = 0;
+	int action_y = 0;
+	int action = get_dig_position(board,board_window,&action_x,&action_y);
 
 	//====== cleanup ======
 	endwin();
@@ -92,4 +92,60 @@ void render_board(struct board_struct *board,WINDOW *win){
 		}
 	}
 	wrefresh(win);
+}
+
+void generate_mines(struct board_struct *board,int count,int origin_x, int origin_y){
+	//==== random mine placement ====
+	int width = board->width;
+	int height = board->height;
+	board->mine_count = count;
+	board->mine_coords = malloc(sizeof(int[2])*count);
+	for (int i = 0; i < count; i++){
+		int x = random() % width;
+		int y = random() % height;
+		if (x == origin_x || y == origin_y){
+			//dont start the player on a mine
+			i--;
+			continue;
+		}
+		board->mine_coords[i][0] = x;
+		board->mine_coords[i][1] = y;
+		//printf("mine at (%d,%d)\n",x,y);
+	}
+}
+
+int get_dig_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y){
+	int width = board->width;
+	int height = board->height;
+	int current_x = *action_x;
+	int current_y = *action_y;
+	for (;;){
+		//====== get input ======
+		int input = getch();
+		switch (input){
+			case KEY_LEFT:
+				current_x--;
+				break;
+			case KEY_RIGHT:
+				current_x++;
+				break;
+			case KEY_UP:
+				current_y--;
+				break;
+			case KEY_DOWN:
+				current_y++;
+				break;
+			default:
+				//printw("unknown key [%c]",input);
+		}
+		//stop the cursor from exiting the window
+		current_x = CLAMP(current_x,0,width-1);
+		current_y = CLAMP(current_y,0,height-1);
+
+		//====== render cursor in correct position ======
+		mvprintw(0,0,"(%d,%d)     ",current_x,current_y);
+		wmove(board_window,current_y+1,current_x+1); //offset from window border
+		refresh();
+		wrefresh(board_window);
+	}
 }
