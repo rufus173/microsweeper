@@ -6,6 +6,13 @@
 #include <stdio.h>
 #include <locale.h>
 
+//====== constant defs ======
+#define ACTION_NULL 0
+#define ACTION_QUIT 1
+#define ACTION_DIG 2
+#define ACTION_FLAG 3
+
+//====== macros ======
 #define CLAMP_MAX(val,max) ((val) < max) ? (val) : max
 #define CLAMP_MIN(val,min) ((val) > min) ? (val) : min
 #define CLAMP(val,min,max) CLAMP_MAX(CLAMP_MIN(val,min),max)
@@ -68,10 +75,13 @@ int main(int argc, char **argv){
 	wrefresh(board_window);
 
 	//====== mainloop ======
-	render_board(board,board_window);
 	int action_x = 0;
 	int action_y = 0;
-	int action = get_dig_position(board,board_window,&action_x,&action_y);
+	for (int action = ACTION_NULL; action != ACTION_QUIT;){
+		render_board(board,board_window);
+		action = get_dig_position(board,board_window,&action_x,&action_y);
+		if (action == ACTION_QUIT) break;
+	}
 
 	//====== cleanup ======
 	endwin();
@@ -81,6 +91,7 @@ int main(int argc, char **argv){
 	free(board->mine_coords);
 	free(board->squares);
 	free(board);
+	printf("exiting. Bye :)\n");
 }
 
 void render_board(struct board_struct *board,WINDOW *win){
@@ -91,7 +102,6 @@ void render_board(struct board_struct *board,WINDOW *win){
 			mvwprintw(win,y+1,x+1,"%c",board->squares[x][y]);
 		}
 	}
-	wrefresh(win);
 }
 
 void generate_mines(struct board_struct *board,int count,int origin_x, int origin_y){
@@ -120,7 +130,11 @@ int get_dig_position(struct board_struct *board,WINDOW *board_window,int *action
 	int current_x = *action_x;
 	int current_y = *action_y;
 	for (;;){
-		//====== get input ======
+		//====== render cursor in correct position ======
+		wmove(board_window,current_y+1,current_x+1); //offset from window border
+		wrefresh(board_window);
+
+		//====== get and process input ======
 		int input = getch();
 		switch (input){
 			case KEY_LEFT:
@@ -135,17 +149,19 @@ int get_dig_position(struct board_struct *board,WINDOW *board_window,int *action
 			case KEY_DOWN:
 				current_y++;
 				break;
+			case '\n':
+				return ACTION_DIG;
+			case 'e':
+				return ACTION_FLAG;
+			case 'q':
+				return ACTION_QUIT;
 			default:
 				//printw("unknown key [%c]",input);
 		}
 		//stop the cursor from exiting the window
 		current_x = CLAMP(current_x,0,width-1);
 		current_y = CLAMP(current_y,0,height-1);
-
-		//====== render cursor in correct position ======
-		mvprintw(0,0,"(%d,%d)     ",current_x,current_y);
-		wmove(board_window,current_y+1,current_x+1); //offset from window border
-		refresh();
-		wrefresh(board_window);
+		*action_x = current_x;
+		*action_y = current_y;
 	}
 }
