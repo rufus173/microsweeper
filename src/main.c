@@ -47,7 +47,7 @@ int main(int argc, char **argv){
 	
 	int width = 20;
 	int height = 10;
-	int mine_count = 30;
+	int mine_count = -1;
 	unsigned int random_seed = time(NULL);
 
 	//====== read arguments ======
@@ -89,6 +89,11 @@ int main(int argc, char **argv){
 	if (height*width < mine_count){
 		fprintf(stderr,"Current selected boardstate would not be possible.\n");
 		return 1;
+	}
+
+	//==== if mine count unset pick a sensible value ====
+	if (mine_count == -1){
+		mine_count = height*width*0.1;
 	}
 
 	printf("Your seed: %d\n",random_seed);
