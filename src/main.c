@@ -11,6 +11,8 @@
 #define ACTION_QUIT 1
 #define ACTION_DIG 2
 #define ACTION_FLAG 3
+#define DEATH_MESSAGE "You have come to an unfortunate and untimely demise. press any key to continue..."
+#define EXIT_MESSAGE "Goodbye :)"
 
 //====== macros ======
 #define CLAMP_MAX(val,max) ((val) < max) ? (val) : max
@@ -33,6 +35,9 @@ void render_board(struct board_struct *board,WINDOW *win);
 void generate_mines(struct board_struct *board,int count,int origin_x, int origin_y);
 int get_action_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y);
 void place_flag(struct board_struct *board,int x,int y);
+int dig_square(struct board_struct *board,int x,int y);
+int is_mine(struct board_struct *board,int x,int y);
+void reveal_square(struct board_struct *board,int x,int y);
 
 int main(int argc, char **argv){
 	//====== generate board ======
@@ -41,7 +46,7 @@ int main(int argc, char **argv){
 	//TODO: defined by command line arguments
 	int width = 20;
 	int height = 10;
-	int mine_count = 5;
+	int mine_count = 10;
 	unsigned int random_seed = 99;
 	srandom(random_seed);
 
@@ -79,8 +84,18 @@ int main(int argc, char **argv){
 	int action_x = 0;
 	int action_y = 0;
 	int started = 0; //has the player dug their first square
+	int mine_hit = 0;
 	for (int action = ACTION_NULL; action != ACTION_QUIT;){
 		render_board(board,board_window);
+		//====== exit if a mine was hit ======
+		if (mine_hit){
+			printw(DEATH_MESSAGE);
+			refresh();
+			getch();
+			break;
+		}
+
+		//====== get what the player wants to do ======
 		action = get_action_position(board,board_window,&action_x,&action_y);
 		if (action == ACTION_QUIT) break;
 		if (action == ACTION_DIG){
@@ -88,6 +103,7 @@ int main(int argc, char **argv){
 				generate_mines(board,mine_count,action_x,action_y);
 			}
 			started = 1;
+			mine_hit = dig_square(board,action_x,action_y);
 		}
 		if ((action == ACTION_FLAG) && started){ //dont let them flag if they havent started
 			place_flag(board,action_x,action_y);
@@ -102,7 +118,7 @@ int main(int argc, char **argv){
 	free(board->mine_coords);
 	free(board->squares);
 	free(board);
-	printf("exiting. Bye :)\n");
+	printf(EXIT_MESSAGE"\n");
 }
 
 void render_board(struct board_struct *board,WINDOW *win){
@@ -185,4 +201,60 @@ void place_flag(struct board_struct *board,int x,int y){
 	} else if (squares[x][y] == '\0'){ //not dug up and no flag
 		squares[x][y] = 'P';
 	}
+}
+int dig_square(struct board_struct *board,int x,int y){ //returns 1/true if mine hit
+	reveal_square(board,x,y);
+	//====== check if a mine has been hit ======
+	if (is_mine(board,x,y)) return 1;
+	else return 0;
+}
+void reveal_square(struct board_struct *board,int x,int y){//recursive floodfill to reveal squares untill numbers are revealed
+	//====== do nothing if square is already revealed ======
+	if (board->squares[x][y] != '\0') return;
+
+	//====== set to 'M' if square is a mine
+	if (is_mine(board,x,y)){
+		board->squares[x][y] = 'M';
+		return;
+	}
+
+	int mine_count = 0;
+	//====== check all permutations of x and y coords around the square ======
+	for (int x_offset = -1; x_offset < 2; x_offset++){
+		for (int y_offset = -1; y_offset < 2; y_offset++){
+			int x_coord = x + x_offset;
+			int y_coord = y + y_offset;
+			//is_mine will discard invalaid coords and return false
+			if (is_mine(board,x_coord,y_coord)) mine_count++;
+		}
+	}
+	if (mine_count > 0){
+		static const char conversion_array[] = {'1','2','3','4','5','6','7','8'};
+		board->squares[x][y] = conversion_array[mine_count-1];
+	}else{
+		board->squares[x][y] = '.';
+		//====== reveal nearby squares untill one with a number ======
+		for (int x_offset = -1; x_offset < 2; x_offset++){
+			for (int y_offset = -1; y_offset < 2; y_offset++){
+				int x_coord = x + x_offset;
+				int y_coord = y + y_offset;
+
+				//====== validate input ======
+				if ((x_coord < 0) || (y_coord < 0)) continue;
+				if ((x_coord > board->width-1) || (y_coord > board->height-1)) continue;
+				reveal_square(board,x_coord,y_coord);
+			}
+		}
+	}
+}
+int is_mine(struct board_struct *board,int x,int y){
+	//====== validate input ======
+	if ((x < 0) || (y < 0)) return 0;
+	if ((x > board->width-1) || (y > board->height-1)) return 0;
+
+	//====== check for mine ======
+	for (int i = 0; i < board->mine_count; i++){
+		if ((board->mine_coords[i][0] == x) && (board->mine_coords[i][1] == y)) return 1;
+	}
+	return 0;
 }
