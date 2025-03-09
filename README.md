@@ -6,7 +6,7 @@ Built off ncurses, hence install `libncurses-dev`
 # Installation
 
 `make microsweeper`
-`sudo make install` (not done yet)
+`sudo make install`
 
 # About
 
