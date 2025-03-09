@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <locale.h>
+#include <getopt.h>
+#include <time.h>
 
 //====== constant defs ======
 #define ACTION_NULL 0
@@ -13,6 +15,7 @@
 #define ACTION_FLAG 3
 #define DEATH_MESSAGE "You have come to an unfortunate and untimely demise. press any key to continue..."
 #define EXIT_MESSAGE "Goodbye :)"
+#define WIN_MESSAGE "You diffused the situation! you win :)"
 
 //====== macros ======
 #define CLAMP_MAX(val,max) ((val) < max) ? (val) : max
@@ -37,16 +40,58 @@ int get_action_position(struct board_struct *board,WINDOW *board_window,int *act
 void place_flag(struct board_struct *board,int x,int y);
 int is_mine(struct board_struct *board,int x,int y);
 int reveal_square(struct board_struct *board,int x,int y);
+int check_if_won(struct board_struct *board);
+void print_help();
 
 int main(int argc, char **argv){
-	//====== generate board ======
-	printf("loading board...\n");
 	
-	//TODO: defined by command line arguments
 	int width = 20;
 	int height = 10;
-	int mine_count = 10;
-	unsigned int random_seed = 99;
+	int mine_count = 30;
+	unsigned int random_seed = time(NULL);
+
+	//====== read arguments ======
+	static struct option long_options[] = {
+		//'h' and 'w'  means it returns the same as its short counterpart
+		{"width", required_argument,0,'H'}, 
+		{"height", required_argument,0,'w'},
+		{"mine-count", required_argument,0,'c'},
+		{"seed", required_argument,0,'s'},
+		{"help", no_argument,0,'h'}
+	};
+	int option_index = 0;
+	for (;;){
+		int result = getopt_long(argc,argv,"H:w:hc:s:",long_options,&option_index);
+		if (result == -1) break; //end of args
+		switch (result){
+			case 'H':
+				height = strtol(optarg,NULL,10);
+				break;
+			case 'w':
+				width = strtol(optarg,NULL,10);
+				break;
+			case 'c':
+				mine_count = strtol(optarg,NULL,10);
+				break;
+			case 's':
+				random_seed = (unsigned long)strtol(optarg,NULL,10);
+				break;
+			case 'h':
+				print_help();
+				return 0;
+			default:
+				fprintf(stderr,"Invalaid arguments provided.\n");
+				break;
+		}
+	}
+
+	//==== error if the boardstate would not be possible ====
+	if (height*width < mine_count){
+		fprintf(stderr,"Current selected boardstate would not be possible.\n");
+		return 1;
+	}
+
+	printf("Your seed: %d\n",random_seed);
 	srandom(random_seed);
 
 	struct board_struct *board = malloc(sizeof(struct board_struct));
@@ -94,6 +139,14 @@ int main(int argc, char **argv){
 			break;
 		}
 
+		//====== exit if the player has won ======
+		if (check_if_won(board)){
+			printw(WIN_MESSAGE);
+			refresh();
+			getch();
+			break;
+		}
+
 		//====== get what the player wants to do ======
 		action = get_action_position(board,board_window,&action_x,&action_y);
 		if (action == ACTION_QUIT) break;
@@ -118,6 +171,7 @@ int main(int argc, char **argv){
 	free(board->squares);
 	free(board);
 	printf(EXIT_MESSAGE"\n");
+	return 0;
 }
 
 void render_board(struct board_struct *board,WINDOW *win){
@@ -138,11 +192,17 @@ void generate_mines(struct board_struct *board,int count,int origin_x, int origi
 	int height = board->height;
 	board->mine_count = count;
 	board->mine_coords = malloc(sizeof(int[2])*count);
+	memset(board->mine_coords,-1,sizeof(int[2])*count);
 	for (int i = 0; i < count; i++){
 		int x = random() % width;
 		int y = random() % height;
 		if (x == origin_x || y == origin_y){
 			//dont start the player on a mine
+			i--;
+			continue;
+		}
+		if (is_mine(board,x,y)){
+			//dont place 2 mines on the same spot
 			i--;
 			continue;
 		}
@@ -251,4 +311,28 @@ int is_mine(struct board_struct *board,int x,int y){
 		if ((board->mine_coords[i][0] == x) && (board->mine_coords[i][1] == y)) return 1;
 	}
 	return 0;
+}
+int check_if_won(struct board_struct *board){
+	//====== check if all non mine squares have been revealed ======
+	for (int x = 0; x < board->width; x++){
+		for (int y = 0; y < board->height; y++){
+			//discount mine squares
+			if (is_mine(board,x,y)) continue;
+
+			if (board->squares[x][y] == '\0') return 0; //not won yet
+			if (board->squares[x][y] == 'P') return 0; //discount incorrect flags
+		}
+	}
+	return 1;
+}
+void print_help(){
+	printf(
+"\
+Options:\n\
+	-H : --height		| sets the height of the board\n\
+	-w : --width		| sets the width of the board\n\
+	-c : --mine-count 	| sets the number of mines\n\
+	-h : --help		| displays help text\n\
+"
+	);
 }
