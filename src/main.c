@@ -35,9 +35,8 @@ void render_board(struct board_struct *board,WINDOW *win);
 void generate_mines(struct board_struct *board,int count,int origin_x, int origin_y);
 int get_action_position(struct board_struct *board,WINDOW *board_window,int *action_x,int *action_y);
 void place_flag(struct board_struct *board,int x,int y);
-int dig_square(struct board_struct *board,int x,int y);
 int is_mine(struct board_struct *board,int x,int y);
-void reveal_square(struct board_struct *board,int x,int y);
+int reveal_square(struct board_struct *board,int x,int y);
 
 int main(int argc, char **argv){
 	//====== generate board ======
@@ -103,7 +102,7 @@ int main(int argc, char **argv){
 				generate_mines(board,mine_count,action_x,action_y);
 			}
 			started = 1;
-			mine_hit = dig_square(board,action_x,action_y);
+			mine_hit = reveal_square(board,action_x,action_y);
 		}
 		if ((action == ACTION_FLAG) && started){ //dont let them flag if they havent started
 			place_flag(board,action_x,action_y);
@@ -202,20 +201,14 @@ void place_flag(struct board_struct *board,int x,int y){
 		squares[x][y] = 'P';
 	}
 }
-int dig_square(struct board_struct *board,int x,int y){ //returns 1/true if mine hit
-	reveal_square(board,x,y);
-	//====== check if a mine has been hit ======
-	if (is_mine(board,x,y)) return 1;
-	else return 0;
-}
-void reveal_square(struct board_struct *board,int x,int y){//recursive floodfill to reveal squares untill numbers are revealed
+int reveal_square(struct board_struct *board,int x,int y){//recursive floodfill to reveal squares untill numbers are revealed
 	//====== do nothing if square is already revealed ======
-	if (board->squares[x][y] != '\0') return;
+	if (board->squares[x][y] != '\0') return 0;
 
 	//====== set to 'M' if square is a mine
 	if (is_mine(board,x,y)){
 		board->squares[x][y] = 'M';
-		return;
+		return 1;
 	}
 
 	int mine_count = 0;
@@ -246,6 +239,7 @@ void reveal_square(struct board_struct *board,int x,int y){//recursive floodfill
 			}
 		}
 	}
+	return 0;
 }
 int is_mine(struct board_struct *board,int x,int y){
 	//====== validate input ======
