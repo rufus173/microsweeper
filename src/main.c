@@ -99,6 +99,9 @@ int main(int argc, char **argv){
 	printf("Your seed: %d\n",random_seed);
 	srandom(random_seed);
 
+	//backup if the first dig one doesnt trigger
+	time_t start_time = time(NULL);
+
 	struct board_struct *board = malloc(sizeof(struct board_struct));
 	memset(board,0,sizeof(struct board_struct));
 	board->width = width;
@@ -158,6 +161,7 @@ int main(int argc, char **argv){
 		if (action == ACTION_DIG){
 			if (started == 0){
 				generate_mines(board,mine_count,action_x,action_y);
+				start_time = time(NULL);
 			}
 			started = 1;
 			mine_hit = reveal_square(board,action_x,action_y);
@@ -175,6 +179,10 @@ int main(int argc, char **argv){
 	free(board->mine_coords);
 	free(board->squares);
 	free(board);
+
+	//====== exit status and messages ======
+	time_t time_taken = time(NULL) - start_time;
+	printf("Game lasted %lu seconds\n",time_taken);
 	printf(EXIT_MESSAGE"\n");
 	return 0;
 }
