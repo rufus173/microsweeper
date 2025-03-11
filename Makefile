@@ -1,8 +1,8 @@
 #CC=gcc
-LIBS=`pkg-config --libs ncursesw` -fsanitize=address
+LDFLAGS=`pkg-config --libs ncursesw`
 CFLAGS=`pkg-config --cflags ncursesw` -Wall -g
 
 microsweeper : src/main.o
-	$(CC) $^ -o $@ $(LIBS)
+	$(CC) $^ -o $@ $(LDFLAGS)
 install : microsweeper
 	./install
